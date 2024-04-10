@@ -12,8 +12,16 @@ touch /etc/config/ubootenv
 
 board=$(board_name)
 
+ubootenv_add_ubi_default() {
+	. /lib/upgrade/nand.sh
+	local envubi=$(nand_find_ubi ubi)
+	local envdev=/dev/$(nand_find_volume $envubi ubootenv)
+	local envdev2=/dev/$(nand_find_volume $envubi ubootenv2)
+	ubootenv_add_uci_config "$envdev" "0x0" "0x1f000" "0x1f000" "1"
+	ubootenv_add_uci_config "$envdev2" "0x0" "0x1f000" "0x1f000" "1"
+}
+
 case "$board" in
-cmcc,rax3000m-emmc |\
 glinet,gl-mt6000 |\
 jdcloud,re-cp-03)
 	env_dev=$(find_mmc_part "u-boot-env")
@@ -25,8 +33,7 @@ livinet,zr-3020*)
 	;;
 h3c,nx30pro |\
 *clt,r30b1* |\
-ruijie,rg-x60-pro* |\
-cmcc,rax3000m)
+ruijie,rg-x60-pro* )
 	ubootenv_add_uci_config "/dev/mtd2" "0x0" "0x80000" "0x20000" "4"
 	;;
 *imou,lc-hx3001*)
@@ -40,6 +47,10 @@ xiaomi,redmi-router-ax6000*)
 nradio,wt9103 |\
 *konka,komi-a31*)
 	ubootenv_add_uci_config "/dev/mtd2" "0x0" "0x20000" "0x80000" "1"
+	;;
+cmcc,rax3000m |\
+asus* )
+	ubootenv_add_uci_config "/dev/mtd0" "0x100000" "0x20000" "0x20000"
 	;;
 esac
 

@@ -2,7 +2,7 @@
 #include "mt7981-cmcc-rax3000m.dtsi"
 
 / {
-	model = "CMCC RAX3000M";
+	model = "CMCC RAX3000M (AX57 Go Uboot)";
 	compatible = "cmcc,rax3000m", "mediatek,mt7981";
 
 	chosen {
@@ -10,45 +10,6 @@
 			    earlycon=uart8250,mmio32,0x11002000";
 	};
 
-	nmbm_spim_nand {
-		compatible = "generic,nmbm";
-		#address-cells = <1>;
-		#size-cells = <1>;
-
-		lower-mtd-device = <&spi_nand>;
-		forced-create;
-
-		partitions {
-			compatible = "fixed-partitions";
-			#address-cells = <1>;
-			#size-cells = <1>;
-
-			partition@0 {
-				label = "BL2";
-				reg = <0x0 0x100000>;
-			};
-
-			partition@100000 {
-				label = "u-boot-env";
-				reg = <0x100000 0x80000>;
-			};
-
-			partition@180000 {
-				label = "Factory";
-				reg = <0x180000 0x200000>;
-			};
-
-			partition@380000 {
-				label = "FIP";
-				reg = <0x380000 0x200000>;
-			};
-
-			partition@580000 {
-				label = "ubi";
-				reg = <0x580000 0x7200000>;
-			};
-		};
-	};
 };
 
 &spi0 {
@@ -70,6 +31,24 @@
 		spi-cal-data = /bits/ 8 <0x53 0x50 0x49 0x4E 0x41 0x4E 0x44>; /* 'SPINAND' */
 		spi-cal-addrlen = <5>;
 		spi-cal-addr = /bits/ 32 <0x0 0x0 0x0 0x0 0x0>;
+
+		partitions: partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "bootloader";
+				reg = <0x0 0x400000>;
+				read-only;
+			};
+
+			partition@400000 {
+				label = "UBI_DEV";
+				reg = <0x400000 0x7c00000>;
+			};
+		};
+
 	};
 };
 

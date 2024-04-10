@@ -14,6 +14,81 @@ define Device/mt7981-spim-nor-rfb
 endef
 TARGET_DEVICES += mt7981-spim-nor-rfb
 
+ifdef IB
+define Build/append-image-stage
+	dd if=$(STAGING_DIR_IMAGE)/$(BOARD)$(if $(SUBTARGET),-$(SUBTARGET))-$(DEVICE_NAME)-$(1) >> $@
+endef
+else
+define Build/append-image-stage
+	cp "$(BIN_DIR)/$(DEVICE_IMG_PREFIX)-$(1)" "$@.stripmeta"
+	fwtool -s /dev/null -t "$@.stripmeta" || :
+	fwtool -i /dev/null -t "$@.stripmeta" || :
+	mkdir -p "$(STAGING_DIR_IMAGE)"
+	dd if="$@.stripmeta" of="$(STAGING_DIR_IMAGE)/$(BOARD)$(if $(SUBTARGET),-$(SUBTARGET))-$(DEVICE_NAME)-$(1)"
+	dd if="$@.stripmeta" >> "$@"
+	rm "$@.stripmeta"
+endef
+
+define Device/Build/initramfs
+  $(call Device/Export,$(KDIR)/tmp/$$(KERNEL_INITRAMFS_IMAGE),$(1))
+  $$(_TARGET): $$(if $$(KERNEL_INITRAMFS),$(BIN_DIR)/$$(KERNEL_INITRAMFS_IMAGE) \
+	  $$(if $$(CONFIG_JSON_OVERVIEW_IMAGE_INFO), $(BUILD_DIR)/json_info_files/$$(KERNEL_INITRAMFS_IMAGE).json,))
+
+  $(KDIR)/$$(KERNEL_INITRAMFS_NAME):: image_prepare
+  $(1)-images: $$(if $$(KERNEL_INITRAMFS),$(BIN_DIR)/$$(KERNEL_INITRAMFS_IMAGE))
+  $(BIN_DIR)/$$(KERNEL_INITRAMFS_IMAGE): $(KDIR)/tmp/$$(KERNEL_INITRAMFS_IMAGE)
+	cp $$^ $$@
+
+  $(KDIR)/tmp/$$(KERNEL_INITRAMFS_IMAGE): $(KDIR)/$$(KERNEL_INITRAMFS_NAME) $(CURDIR)/Makefile $$(KERNEL_DEPENDS) image_prepare
+	@rm -f $$@
+	$$(call concat_cmd,$$(KERNEL_INITRAMFS))
+
+  $(call Device/Export,$(BUILD_DIR)/json_info_files/$$(KERNEL_INITRAMFS_IMAGE).json,$(1))
+
+  $(BUILD_DIR)/json_info_files/$$(KERNEL_INITRAMFS_IMAGE).json: $(BIN_DIR)/$$(KERNEL_INITRAMFS_IMAGE)
+	@mkdir -p $$(shell dirname $$@)
+	DEVICE_ID="$(1)" \
+	SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
+	FILE_NAME="$$(notdir $$^)" \
+	FILE_DIR="$(KDIR)/tmp" \
+	FILE_TYPE="kernel" \
+	FILE_FILESYSTEM="initramfs" \
+	DEVICE_IMG_PREFIX="$$(DEVICE_IMG_PREFIX)" \
+	DEVICE_VENDOR="$$(DEVICE_VENDOR)" \
+	DEVICE_MODEL="$$(DEVICE_MODEL)" \
+	DEVICE_VARIANT="$$(DEVICE_VARIANT)" \
+	DEVICE_ALT0_VENDOR="$$(DEVICE_ALT0_VENDOR)" \
+	DEVICE_ALT0_MODEL="$$(DEVICE_ALT0_MODEL)" \
+	DEVICE_ALT0_VARIANT="$$(DEVICE_ALT0_VARIANT)" \
+	DEVICE_ALT1_VENDOR="$$(DEVICE_ALT1_VENDOR)" \
+	DEVICE_ALT1_MODEL="$$(DEVICE_ALT1_MODEL)" \
+	DEVICE_ALT1_VARIANT="$$(DEVICE_ALT1_VARIANT)" \
+	DEVICE_ALT2_VENDOR="$$(DEVICE_ALT2_VENDOR)" \
+	DEVICE_ALT2_MODEL="$$(DEVICE_ALT2_MODEL)" \
+	DEVICE_ALT2_VARIANT="$$(DEVICE_ALT2_VARIANT)" \
+	DEVICE_ALT3_VENDOR="$$(DEVICE_ALT3_VENDOR)" \
+	DEVICE_ALT3_MODEL="$$(DEVICE_ALT3_MODEL)" \
+	DEVICE_ALT3_VARIANT="$$(DEVICE_ALT3_VARIANT)" \
+	DEVICE_ALT4_VENDOR="$$(DEVICE_ALT4_VENDOR)" \
+	DEVICE_ALT4_MODEL="$$(DEVICE_ALT4_MODEL)" \
+	DEVICE_ALT4_VARIANT="$$(DEVICE_ALT4_VARIANT)" \
+	DEVICE_TITLE="$$(DEVICE_TITLE)" \
+	DEVICE_PACKAGES="$$(DEVICE_PACKAGES)" \
+	TARGET="$(BOARD)" \
+	SUBTARGET="$(if $(SUBTARGET),$(SUBTARGET),generic)" \
+	VERSION_NUMBER="$(VERSION_NUMBER)" \
+	VERSION_CODE="$(VERSION_CODE)" \
+	SUPPORTED_DEVICES="$$(SUPPORTED_DEVICES)" \
+	$(TOPDIR)/scripts/json_add_image_info.py $$@
+endef
+
+endif
+
+define Build/asus-trx
+	$(STAGING_DIR_HOST)/bin/mkasustrx $(wordlist 1,$(words $(1)),$(1)) -i $@ -o $@.new
+	mv $@.new $@
+endef
+
 define Device/mt7981-spim-nand-2500wan-gmac2
   DEVICE_VENDOR := MediaTek
   DEVICE_MODEL := mt7981-spim-nand-2500wan-gmac2
@@ -441,7 +516,7 @@ TARGET_DEVICES += cmcc_a10
 
 define Device/cmcc_rax3000m
   DEVICE_VENDOR := CMCC
-  DEVICE_MODEL := RAX3000M NAND
+  DEVICE_MODEL := RAX3000M ASUS
   DEVICE_DTS := mt7981-cmcc-rax3000m
   DEVICE_DTS_DIR := $(DTS_DIR)/mediatek
   DEVICE_PACKAGES := $(MT7981_USB_PKGS) luci-app-samba4
@@ -453,21 +528,16 @@ define Device/cmcc_rax3000m
   KERNEL_IN_UBI := 1
   IMAGES += factory.bin
   IMAGE/factory.bin := append-ubi | check-size $$$$(IMAGE_SIZE)
+  KERNEL := kernel-bin | lzma | \
+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
+  KERNEL_INITRAMFS := kernel-bin | lzma | \
+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
+  ARTIFACTS := initramfs.trx
+  ARTIFACT/initramfs.trx := append-image-stage initramfs-kernel.bin | \
+  uImage none | asus-trx -n $$(DEVICE_MODEL)
   IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
 endef
 TARGET_DEVICES += cmcc_rax3000m
-
-define Device/cmcc_rax3000m-emmc
-  DEVICE_VENDOR := CMCC
-  DEVICE_MODEL := RAX3000M eMMC
-  DEVICE_DTS := mt7981-cmcc-rax3000m-emmc
-  DEVICE_DTS_DIR := $(DTS_DIR)/mediatek
-  SUPPORTED_DEVICES := cmcc,rax3000m-emmc
-  DEVICE_PACKAGES := $(MT7981_USB_PKGS) f2fsck losetup mkf2fs kmod-fs-f2fs kmod-mmc \
-	luci-app-samba4
-  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
-endef
-TARGET_DEVICES += cmcc_rax3000m-emmc
 
 define Device/h3c_nx30pro
   DEVICE_VENDOR := H3C

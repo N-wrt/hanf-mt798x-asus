@@ -202,17 +202,21 @@ platform_do_upgrade() {
 	*jcg,q30* |\
 	nradio,wt9103 |\
 	cmcc,a10 |\
-	cmcc,rax3000m |\
 	h3c,nx30pro |\
 	*konka,komi-a31* |\
 	*snand*)
 		nand_do_upgrade "$1"
 		;;
-	cmcc,rax3000m-emmc |\
 	*emmc*)
 		CI_KERNPART="kernel"
 		CI_ROOTPART="rootfs"
 		emmc_do_upgrade "$1"
+		;;
+	cmcc,rax3000m |\
+	asus*)
+		CI_UBIPART="UBI_DEV"
+		CI_KERNPART="linux"
+		nand_do_upgrade "$1"
 		;;
 	xiaomi,mi-router-ax3000t-stock|\
 	xiaomi,mi-router-wr30u-stock)
@@ -248,7 +252,6 @@ platform_check_image() {
 	*imou,lc-hx3001* |\
 	*jcg,q30* |\
 	cmcc,a10 |\
-	cmcc,rax3000m* |\
 	h3c,nx30pro |\
 	*konka,komi-a31* |\
 	nradio,wt9103 |\
@@ -264,6 +267,12 @@ platform_check_image() {
 
 		return 0
 		;;
+
+	cmcc,rax3000m |\
+	asus*)
+		asus_initial_setup
+		;;
+
 	*)
 		[ "$magic" != "d00dfeed" ] && {
 			echo "Invalid image type."
@@ -274,6 +283,16 @@ platform_check_image() {
 	esac
 
 	return 0
+}
+
+asus_initial_setup(){
+	# initialize UBI if it's running on initramfs
+	[ "$(rootfs_type)" = "tmpfs" ] || return 0
+
+	ubirmvol /dev/ubi0 -N rootfs
+	ubirmvol /dev/ubi0 -N rootfs_data
+	ubirmvol /dev/ubi0 -N jffs2
+	ubimkvol /dev/ubi0 -N jffs2 -s 0x3e000
 }
 
 platform_pre_upgrade() {
